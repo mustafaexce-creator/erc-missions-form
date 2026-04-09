@@ -36,6 +36,10 @@ function doGet(e) {
       return sendJson(getVolunteers());
     }
     
+    if (action === 'getVolunteerReport') {
+      return sendJson(getVolunteerReport(e.parameter.volunteerId));
+    }
+    
     return sendJson({ error: 'Unknown action' });
   } catch (err) {
     return sendJson({ error: err.message });
@@ -86,10 +90,10 @@ function getVolunteers() {
 
 // ─── Log Mission Hours ──────────────────────────────────────────────────────
 function logMission(data) {
-  const { date, hours, volunteerIds } = data;
+  const { date, hours, volunteerIds, missionName } = data;
   
   // Validate inputs
-  if (!date || !hours || !volunteerIds || volunteerIds.length === 0) {
+  if (!date || !hours || !volunteerIds || volunteerIds.length === 0 || !missionName) {
     return { success: false, error: 'بيانات غير مكتملة' };
   }
   
@@ -133,6 +137,13 @@ function logMission(data) {
       const existingValue = cell.getValue();
       const currentHours = (typeof existingValue === 'number') ? existingValue : 0;
       cell.setValue(currentHours + parseFloat(hours));
+      
+      // Update cell note with mission name
+      const existingNote = cell.getNote();
+      const newNoteEntry = `• ${missionName} (${hours} ساعة/ساعات)`;
+      const updatedNote = existingNote ? `${existingNote}\n${newNoteEntry}` : newNoteEntry;
+      cell.setNote(updatedNote);
+      
       updated++;
     } else {
       notFound.push(vid);
@@ -163,6 +174,87 @@ function sendJson(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// ─── Get Volunteer Report ───────────────────────────────────────────────────
+function getVolunteerReport(volunteerId) {
+  if (!volunteerId) return { error: 'Missing volunteerId parameter' };
+  
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  
+  let totalHours = 0;
+  const missions = [];
+  const currentYear = new Date().getFullYear();
+  
+  for (const sheet of sheets) {
+    const sheetName = sheet.getName();
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow < DATA_START_ROW || lastCol < FIRST_DAY_COLUMN) continue;
+    
+    const idRange = sheet.getRange(DATA_START_ROW, ID_COLUMN, lastRow - DATA_START_ROW + 1, 1).getValues();
+    let targetRow = -1;
+    
+    for (let i = 0; i < idRange.length; i++) {
+      if (idRange[i][0] && idRange[i][0].toString().trim() === volunteerId.toString().trim()) {
+        targetRow = DATA_START_ROW + i;
+        break;
+      }
+    }
+    
+    if (targetRow === -1) continue;
+    
+    // Ignore the last column as it contains 'Total Monthly Hours'
+    const numDays = lastCol - FIRST_DAY_COLUMN;
+    const daysDataRange = sheet.getRange(targetRow, FIRST_DAY_COLUMN, 1, numDays);
+    const daysData = daysDataRange.getValues()[0];
+    const daysNotes = daysDataRange.getNotes()[0];
+    
+    for (let j = 0; j < daysData.length; j++) {
+      const cellValue = daysData[j];
+      const cellHours = parseFloat(cellValue);
+      
+      if (!isNaN(cellHours) && cellHours > 0) {
+        const dayOfMonth = j + 1;
+        const dateStr = `${dayOfMonth} ${sheetName} ${currentYear}`;
+        const note = daysNotes[j] || '';
+        
+        const noteLines = note.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const dailyMissions = [];
+        
+        if (noteLines.length > 0) {
+          for (const line of noteLines) {
+            const match = line.match(/^•?\s*(.+?)(?:\s*\(\s*([\d.]+)\s*ساعة\/ساعات\s*\))?$/);
+            if (match) {
+              const mName = match[1].trim();
+              const hrs = parseFloat(match[2]) || cellHours;
+              dailyMissions.push({ date: dateStr, missionName: mName, hours: hrs });
+            } else {
+              dailyMissions.push({ date: dateStr, missionName: line, hours: cellHours });
+            }
+          }
+        }
+        
+        // Push parsed tasks to global missions list
+        if (dailyMissions.length > 0) {
+          missions.push(...dailyMissions);
+        } else {
+          // Fallback if there are hours but no notes
+          missions.push({ date: dateStr, missionName: 'مهمة غير مسماة', hours: cellHours });
+        }
+        
+        totalHours += cellHours;
+      }
+    }
+  }
+  
+  return {
+    success: true,
+    totalHours: totalHours,
+    missions: missions
+  };
+}
+
 // ─── Test Functions (Run from Apps Script editor) ────────────────────────────
 function testGetVolunteers() {
   const result = getVolunteers();
@@ -171,6 +263,8 @@ function testGetVolunteers() {
 
 function testLogMission() {
   const result = logMission({
+    action: 'logMission',
+    missionName: 'مهمة تجريبية',
     date: '2026-03-15',
     hours: 3,
     volunteerIds: ['1', '2', '3']

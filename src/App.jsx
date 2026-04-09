@@ -13,11 +13,16 @@ import {
   ChevronDown,
   FileText,
   Copy,
+  Lock,
+  LogOut,
+  Award,
+  TrendingUp,
+  TableProperties
 } from 'lucide-react';
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 // Replace this URL with your deployed Google Apps Script web app URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxfZ_rufx-ViD4calgJ5qcT1Aw53pUC9EHzIN_KoaVQ6oB8_LrpM1M99DdvfXUm_fY5/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx10jryOefUGokcpnTGQy9zBDTokJXLchaLz-afLqL4plMlKYTaUkn61ScwzyKRYwke/exec';
 
 // ─── ERC Logo Component ─────────────────────────────────────────────────────
 function ERCLogo({ className = '' }) {
@@ -78,8 +83,19 @@ export default function App() {
   const [submitStatus, setSubmitStatus] = useState(null); // 'success' | 'error' | null
   const [errorMessage, setErrorMessage] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Manager Portal State
+  const [isManagerPortal, setIsManagerPortal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [managerSearchQuery, setManagerSearchQuery] = useState('');
+  const [reportData, setReportData] = useState(null);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [isManagerDropdownOpen, setIsManagerDropdownOpen] = useState(false);
+
   const searchInputRef = useRef(null);
   const dropdownRef = useRef(null);
+  const managerDropdownRef = useRef(null);
 
   // Set default date to today
   useEffect(() => {
@@ -130,6 +146,9 @@ export default function App() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
       }
+      if (managerDropdownRef.current && !managerDropdownRef.current.contains(event.target)) {
+        setIsManagerDropdownOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -171,6 +190,10 @@ export default function App() {
     setErrorMessage('');
 
     // Validation
+    if (!missionName.trim()) {
+      setErrorMessage('يرجى إدخال اسم المهمة');
+      return;
+    }
     if (!missionDate) {
       setErrorMessage('يرجى تحديد تاريخ المهمة');
       return;
@@ -203,6 +226,7 @@ export default function App() {
     try {
       const payload = {
         action: 'logMission',
+        missionName: missionName.trim(),
         date: missionDate,
         hours: parseFloat(missionHours),
         volunteerIds: selectedVolunteers.map(v => v.id),
@@ -264,6 +288,262 @@ export default function App() {
     return `${days[date.getDay()]} — ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
+  // ─── Manager Logic ─────────────────────────────────────────────────────────
+  const handlePinSubmit = (e) => {
+    e.preventDefault();
+    if (pinInput === '1911') {
+      setIsManagerPortal(true);
+      setShowPinModal(false);
+      setPinInput('');
+    } else {
+      alert('الرمز السري غير صحيح');
+      setPinInput('');
+    }
+  };
+
+  const filteredManagerVolunteers = allVolunteers.filter(v => {
+    if (!managerSearchQuery) return true;
+    const query = normalizeText(managerSearchQuery);
+    return normalizeText(v.name).includes(query) || v.id.toString().includes(query);
+  });
+
+  const fetchReport = async (volunteerId) => {
+    setIsLoadingReport(true);
+    setReportData(null);
+    try {
+      const res = await fetch(`${APPS_SCRIPT_URL}?action=getVolunteerReport&volunteerId=${volunteerId}`);
+      const data = await res.json();
+      if (data.success) {
+        setReportData({
+          totalHours: data.totalHours || 0,
+          missions: data.missions || []
+        });
+      } else {
+        alert(data.error || 'حدث خطأ في جلب التقرير');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('فشل في الاتصال. تأكد من الإنترنت.');
+    } finally {
+      setIsLoadingReport(false);
+    }
+  };
+
+  const currentVolunteerReport = allVolunteers.find(v => managerSearchQuery && v.id.toString() === managerSearchQuery) || null;
+
+  // ─── Manager UI ────────────────────────────────────────────────────────────
+  if (isManagerPortal) {
+    return (
+      <div className="min-h-screen py-6 px-4 sm:py-10 bg-erc-warm-gray/10" dir="rtl">
+        <div className="max-w-5xl mx-auto">
+          {/* Header */}
+          <header className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <ERCLogo className="scale-75 origin-right" />
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-erc-dark">بوابة الإدارة والتقارير</h1>
+                <p className="text-erc-dark-soft/60 text-xs sm:text-sm">متابعة ساعات المهام للمتطوعين</p>
+              </div>
+            </div>
+            <button onClick={() => { setIsManagerPortal(false); setReportData(null); setManagerSearchQuery(''); }} className="flex items-center gap-2 px-4 py-2 bg-white border border-erc-warm-gray/60 rounded-xl shadow-sm text-erc-dark-soft font-bold hover:bg-erc-red hover:border-erc-red text-erc-red hover:text-white transition-all cursor-pointer text-sm">
+              <LogOut className="w-4 h-4" /> خروج
+            </button>
+          </header>
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Left Column: Search */}
+            <div className="lg:col-span-1 space-y-4">
+              <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg p-5 sticky top-6 z-10 transition-all">
+                <label className="flex items-center gap-2 text-sm font-bold text-erc-dark mb-3">
+                  <Search className="w-4 h-4 text-erc-red" /> بحث والوصول لمتطوع
+                </label>
+
+                <div className="relative" ref={managerDropdownRef}>
+                  <div className="flex gap-2 relative">
+                    <div className="relative flex-1">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-erc-dark-soft/30 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="الاسم أو رقم العضوية..."
+                        value={managerSearchQuery}
+                        onChange={e => {
+                          setManagerSearchQuery(e.target.value);
+                          setIsManagerDropdownOpen(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            setIsManagerDropdownOpen(true);
+                          }
+                        }}
+                        className="w-full pr-10 pl-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-sm focus:outline-none focus:ring-2 focus:ring-black/10 transition-all duration-200"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsManagerDropdownOpen(true)}
+                      className="px-6 rounded-xl bg-erc-dark hover:bg-black text-white font-bold text-sm transition-all duration-200 shadow-md shadow-black/10 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-erc-dark/50"
+                    >
+                      بحث
+                    </button>
+                  </div>
+
+                  {isManagerDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-2 bg-white rounded-xl border border-erc-warm-gray shadow-2xl shadow-black/10 max-h-56 overflow-y-auto">
+                      {filteredManagerVolunteers.length === 0 ? (
+                        <div className="px-4 py-6 text-center text-erc-dark-soft/40 text-sm">
+                          {managerSearchQuery ? 'لا توجد نتائج' : 'اكتب للبحث'}
+                        </div>
+                      ) : (
+                        filteredManagerVolunteers.map(v => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => {
+                              setManagerSearchQuery(v.id.toString());
+                              setIsManagerDropdownOpen(false);
+                              fetchReport(v.id);
+                            }}
+                            className="w-full text-right px-4 py-3 hover:bg-erc-red-50 border-b border-erc-warm-gray/50 last:border-b-0 cursor-pointer transition-colors focus:outline-none"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-erc-red/80 to-erc-red-dark/80 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                {v.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-erc-dark truncate">{v.name}</p>
+                                <div className="text-xs text-erc-dark-soft/50 font-medium flex justify-between items-center">
+                                  <span>#{v.id}</span>
+                                  {currentVolunteerReport?.id === v.id && <TrendingUp className="w-3 h-3 text-erc-red" />}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Report */}
+            <div className="lg:col-span-2 space-y-6 relative z-0">
+              {!reportData && !isLoadingReport && (
+                <div className="bg-white/50 border-2 border-dashed border-erc-dark-soft/20 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                    <Search className="w-8 h-8 text-erc-dark-soft/30" />
+                  </div>
+                  <p className="text-erc-dark-soft/70 font-bold text-lg">الرجاء اختيار متطوع لعرض تقريره</p>
+                </div>
+              )}
+
+              {isLoadingReport && (
+                <div className="bg-white/70 backdrop-blur-xl border border-white/80 shadow-lg rounded-2xl p-16 flex flex-col items-center justify-center text-center">
+                  <Loader2 className="w-10 h-10 text-erc-red animate-spin mx-auto mb-4" />
+                  <p className="text-erc-dark-soft/70 font-bold">جاري جلب الساعات والمهام من جميع الشهور...</p>
+                  <p className="text-xs mt-2 text-erc-dark-soft/40">قد يستغرق هذا بضع ثوانٍ</p>
+                </div>
+              )}
+
+              {reportData && !isLoadingReport && (
+                <div className="animate-fade-in-up">
+                  {/* Summary Card */}
+                  <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg p-6 relative overflow-hidden mb-6">
+                    <div className="absolute top-0 left-0 w-48 h-48 bg-erc-red/5 rounded-full blur-3xl -z-10" />
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8 border-b border-erc-warm-gray/50 pb-6">
+                      <div>
+                        <h2 className="text-xl font-bold text-erc-dark mb-1">ملخص الإنجاز</h2>
+                        <p className="text-sm font-semibold text-erc-dark-soft/70">
+                          {currentVolunteerReport?.name} <span className="mr-2 px-2 py-0.5 bg-erc-dark-soft/10 rounded-md text-xs">#{currentVolunteerReport?.id}</span>
+                        </p>
+                      </div>
+
+                      <div className="text-center sm:text-left bg-erc-red-50 border border-erc-red/10 rounded-2xl p-4 min-w-[140px]">
+                        <p className="text-xs text-erc-red-dark font-bold mb-1">إجمالي الساعات</p>
+                        <p className="text-4xl font-black text-erc-red">
+                          {reportData.totalHours.toFixed(1)} <span className="text-base font-bold">س</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mb-2 flex justify-between items-end">
+                      <span className="font-bold text-sm text-erc-dark flex items-center gap-1.5">
+                        <TrendingUp className="w-4 h-4 text-emerald-500" /> مسار الـ 200 ساعة
+                      </span>
+                      <span className="text-xs font-bold text-erc-dark-soft/50">{Math.min(100, (reportData.totalHours / 200) * 100).toFixed(0)}%</span>
+                    </div>
+
+                    <div className="h-4 w-full bg-erc-warm-gray rounded-full overflow-hidden mb-4 shadow-inner">
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${reportData.totalHours >= 200 ? 'bg-gradient-to-l from-emerald-400 to-green-600' : 'bg-gradient-to-l from-erc-red to-orange-400'}`}
+                        style={{ width: `${Math.min(100, (reportData.totalHours / 200) * 100)}%` }}
+                      />
+                    </div>
+
+                    {reportData.totalHours >= 200 ? (
+                      <div className="flex items-center gap-3 text-emerald-700 bg-emerald-50 border border-emerald-100 p-3 rounded-xl w-full sm:w-fit mt-5">
+                        <Award className="w-6 h-6 flex-shrink-0 text-emerald-500" />
+                        <span className="text-sm font-bold">إنجاز رائع! لقد أتم المتطوع 200 ساعة بنجاح!</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-erc-dark-soft/70 font-medium flex items-center gap-2 mt-5">
+                        يحتاج المتطوع لإتمام <strong className="text-erc-red bg-erc-red-50 px-2 rounded tracking-wide">{Math.max(0, 200 - reportData.totalHours).toFixed(1)}</strong> ساعة إضافية للوصول للهدف.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Table */}
+                  <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg p-6 overflow-hidden">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="font-bold text-lg text-erc-dark flex items-center gap-2">
+                        <TableProperties className="w-5 h-5 text-erc-red" />
+                        سجل المهمات المفصل
+                      </h3>
+                      <span className="bg-erc-warm-gray px-3 py-1 rounded-full text-xs font-bold text-erc-dark-soft/60">
+                        {reportData.missions.length} مهمة
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-right text-sm">
+                        <thead>
+                          <tr className="border-b-2 border-erc-warm-gray/80">
+                            <th className="pb-3 px-2 font-black text-erc-dark-soft/70 whitespace-nowrap">التاريخ</th>
+                            <th className="pb-3 px-2 font-black text-erc-dark-soft/70 w-1/2">المهمة</th>
+                            <th className="pb-3 px-2 font-black text-erc-dark-soft/70 whitespace-nowrap">الساعات</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.missions.length === 0 ? (
+                            <tr>
+                              <td colSpan="3" className="py-12 text-center text-erc-dark-soft/50 font-medium">عذراً، لا توجد مهمات مسجلة لهذا المتطوع.</td>
+                            </tr>
+                          ) : (
+                            reportData.missions.map((m, idx) => (
+                              <tr key={idx} className="border-b border-erc-warm-gray/40 last:border-b-0 hover:bg-black/[0.015] transition-colors">
+                                <td className="py-4 px-2 text-erc-dark/70 font-medium whitespace-nowrap align-middle">{m.date}</td>
+                                <td className="py-4 px-2 font-bold text-erc-dark leading-relaxed">{m.missionName}</td>
+                                <td className="py-4 px-2 text-erc-red font-black align-middle text-left max-w-[80px]" dir="ltr">{m.hours.toFixed(1)} س</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ─── Loading State ────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -316,7 +596,7 @@ export default function App() {
           <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-black/[0.04] p-5 animate-fade-in-up-delay-1">
             <label className="flex items-center gap-2 text-sm font-bold text-erc-dark mb-3">
               <FileText className="w-4 h-4 text-erc-red" />
-              اسم المهمة (اختياري للتوثيق والنسخ)
+              اسم المهمة
             </label>
             <input
               type="text"
@@ -324,6 +604,7 @@ export default function App() {
               onChange={(e) => setMissionName(e.target.value)}
               placeholder="مثال: التغطية الطبية في استاد القاهرة"
               className="w-full px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base placeholder:text-erc-dark-soft/30 focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
+              required
             />
           </div>
 
@@ -522,7 +803,7 @@ export default function App() {
                 <FileText className="w-4 h-4 text-erc-red" />
                 تفاصيل المهمة للنسخ
               </h3>
-              <button 
+              <button
                 type="button"
                 onClick={handleCopy}
                 className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-erc-red-50 hover:bg-erc-red-100 text-erc-red-dark transition-colors active:scale-95"
@@ -538,12 +819,54 @@ export default function App() {
         )}
 
         {/* Footer */}
-        <footer className="text-center mt-8 mb-4">
+        <footer className="flex items-center justify-between mt-8 mb-4 px-2">
           <p className="text-xs text-erc-dark-soft/30 font-medium">
             الهلال الأحمر المصري © {new Date().getFullYear()}
           </p>
+          <button
+            type="button"
+            onClick={() => setShowPinModal(true)}
+            className="p-2 text-erc-dark-soft/20 hover:text-erc-red transition-colors rounded-full hover:bg-erc-red/5 cursor-pointer"
+            aria-label="بوابة الإدارة"
+          >
+            <Lock className="w-4 h-4" />
+          </button>
         </footer>
       </div>
+
+      {/* PIN Modal overlay */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm animate-fade-in-up border border-white/20 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-xl text-erc-dark flex items-center gap-2">
+                <Lock className="w-5 h-5 text-erc-red" />
+                بوابة الإدارة
+              </h3>
+              <button
+                onClick={() => { setShowPinModal(false); setPinInput(''); }}
+                className="p-1.5 hover:bg-erc-warm-gray rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5 text-erc-dark-soft/60" />
+              </button>
+            </div>
+            <form onSubmit={handlePinSubmit}>
+              <p className="text-xs text-erc-dark-soft/60 mb-2 font-medium">أدخل الرمز السري للوصول للتقارير</p>
+              <input
+                type="password"
+                value={pinInput}
+                onChange={e => setPinInput(e.target.value)}
+                placeholder="••••"
+                className="w-full px-4 py-4 rounded-xl bg-erc-warm-gray/30 border border-erc-warm-gray/80 mb-4 text-center tracking-[1em] font-black text-xl text-erc-dark focus:outline-none focus:ring-2 focus:ring-erc-red/40"
+                autoFocus
+              />
+              <button type="submit" className="w-full py-4 bg-gradient-to-l from-erc-red to-erc-red-dark text-white font-bold rounded-xl hover:shadow-lg hover:shadow-erc-red/30 active:scale-[0.98] transition-all cursor-pointer">
+                دخول
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
