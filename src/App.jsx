@@ -765,8 +765,8 @@ export default function App() {
               <Clock className="w-4 h-4 text-erc-red" />
               وقت المهمة
             </label>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="w-full sm:flex-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
                 <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">من الساعة</label>
                 <input
                   type="time"
@@ -776,8 +776,8 @@ export default function App() {
                   required
                 />
               </div>
-              <ArrowLeft className="hidden sm:block w-5 h-5 text-erc-dark-soft/30 mt-5 flex-shrink-0" />
-              <div className="w-full sm:flex-1 min-w-0">
+              <ArrowLeft className="w-5 h-5 text-erc-dark-soft/30 mt-5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
                 <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">إلى الساعة</label>
                 <input
                   type="time"
