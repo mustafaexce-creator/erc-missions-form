@@ -27,6 +27,22 @@ const FIRST_DAY_COLUMN = 4; // Column D - first day column (1-مارس-2026)
 const HEADER_ROW = 2;       // Row 2 has the column headers
 const DATA_START_ROW = 3;   // Row 3 is where volunteer data starts
 
+// Convert Western digits to Arabic-Indic digits
+function toAr(val) {
+  return String(val).replace(/\d/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'[d]; });
+}
+
+// Convert 24h time string ("14:00") to 12h Arabic format ("٢:٠٠ م")
+function to12h(time24) {
+  if (!time24) return '';
+  var parts = time24.split(':');
+  var h = parseInt(parts[0], 10);
+  var m = parts[1];
+  var period = h >= 12 ? 'م' : 'ص';
+  var hour12 = h % 12 || 12;
+  return toAr(hour12) + ':' + toAr(m) + ' ' + period;
+}
+
 // ─── GET Handler — Returns volunteer list ────────────────────────────────────
 function doGet(e) {
   try {
@@ -90,7 +106,7 @@ function getVolunteers() {
 
 // ─── Log Mission Hours ──────────────────────────────────────────────────────
 function logMission(data) {
-  const { date, hours, volunteerIds, missionName } = data;
+  const { date, hours, volunteerIds, missionName, timeFrom, timeTo } = data;
   
   // Validate inputs
   if (!date || !hours || !volunteerIds || volunteerIds.length === 0 || !missionName) {
@@ -138,9 +154,15 @@ function logMission(data) {
       const currentHours = (typeof existingValue === 'number') ? existingValue : 0;
       cell.setValue(currentHours + parseFloat(hours));
       
-      // Update cell note with mission name
+      // Update cell note with mission name and time range
+      // Use two lines to avoid BiDi rendering issues in Google Sheets:
+      // Line 1: Arabic (mission name + hours)
+      // Line 2: Pure LTR (time range)
       const existingNote = cell.getNote();
-      const newNoteEntry = `• ${missionName} (${hours} ساعة/ساعات)`;
+      let newNoteEntry = `• ${missionName} — ${toAr(hours)} ساعة`;
+      if (timeFrom && timeTo) {
+        newNoteEntry += `\n  ${to12h(timeFrom)} — ${to12h(timeTo)}`;
+      }
       const updatedNote = existingNote ? `${existingNote}\n${newNoteEntry}` : newNoteEntry;
       cell.setNote(updatedNote);
       
@@ -223,15 +245,52 @@ function getVolunteerReport(volunteerId) {
         const dailyMissions = [];
         
         if (noteLines.length > 0) {
-          for (const line of noteLines) {
-            const match = line.match(/^•?\s*(.+?)(?:\s*\(\s*([\d.]+)\s*ساعة\/ساعات\s*\))?$/);
-            if (match) {
-              const mName = match[1].trim();
-              const hrs = parseFloat(match[2]) || cellHours;
-              dailyMissions.push({ date: dateStr, missionName: mName, hours: hrs });
-            } else {
-              dailyMissions.push({ date: dateStr, missionName: line, hours: cellHours });
+          var i = 0;
+          while (i < noteLines.length) {
+            var line = noteLines[i];
+            // Normalize Arabic-Indic digits to Western for parsing
+            var normLine = line.replace(/[٠-٩]/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); });
+            
+            // Check if this is a mission header line: • missionName — X ساعة (new format)
+            var matchNewFormat = normLine.match(/^•?\s*(.+?)\s*—\s*([\d.]+)\s*ساعة$/);
+            if (matchNewFormat) {
+              var mName = matchNewFormat[1].trim();
+              var hrs = parseFloat(matchNewFormat[2]) || 0;
+              var timeRange = '';
+              
+              // Check if next line is a time range (may have invisible marks or Arabic digits)
+              if (i + 1 < noteLines.length) {
+                var nextLine = noteLines[i + 1].replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '').trim();
+                // Keep original Arabic text for display, just check if it's a time line
+                var normNext = nextLine.replace(/[٠-٩]/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); });
+                var timeMatch = normNext.match(/^(\d{1,2}:\d{2}\s*(?:AM|PM|[صم])?)\s*[→—]\s*(\d{1,2}:\d{2}\s*(?:AM|PM|[صم])?)$/);
+                if (timeMatch) {
+                  timeRange = nextLine; // keep original Arabic display
+                  i++; // skip the time line
+                }
+              }
+              
+              dailyMissions.push({ date: dateStr, missionName: mName, hours: hrs, timeRange: timeRange });
+              i++;
+              continue;
             }
+            
+            // Legacy: • missionName (8:00 AM - 4:00 PM | X ساعة/ساعات)
+            var matchWithTime = line.match(/^•?\s*(.+?)\s*\(\s*(\d{1,2}:\d{2}(?:\s*(?:AM|PM|[صم]))?)\s*-\s*(\d{1,2}:\d{2}(?:\s*(?:AM|PM|[صم]))?)\s*\|\s*([\d.]+)\s*ساعة\/ساعات\s*\)$/);
+            if (matchWithTime) {
+              dailyMissions.push({ date: dateStr, missionName: matchWithTime[1].trim(), hours: parseFloat(matchWithTime[4]) || cellHours, timeRange: matchWithTime[2].trim() + ' → ' + matchWithTime[3].trim() });
+              i++;
+              continue;
+            }
+            
+            // Legacy: • missionName (X ساعة/ساعات)
+            var matchOld = line.match(/^•?\s*(.+?)(?:\s*\(\s*([\d.]+)\s*ساعة\/ساعات\s*\))?$/);
+            if (matchOld) {
+              dailyMissions.push({ date: dateStr, missionName: matchOld[1].trim(), hours: parseFloat(matchOld[2]) || cellHours, timeRange: '' });
+            } else {
+              dailyMissions.push({ date: dateStr, missionName: line, hours: cellHours, timeRange: '' });
+            }
+            i++;
           }
         }
         
@@ -240,7 +299,7 @@ function getVolunteerReport(volunteerId) {
           missions.push(...dailyMissions);
         } else {
           // Fallback if there are hours but no notes
-          missions.push({ date: dateStr, missionName: 'مهمة غير مسماة', hours: cellHours });
+          missions.push({ date: dateStr, missionName: 'مهمة غير مسماة', hours: cellHours, timeRange: '' });
         }
         
         totalHours += cellHours;
@@ -270,4 +329,32 @@ function testLogMission() {
     volunteerIds: ['1', '2', '3']
   });
   Logger.log(JSON.stringify(result, null, 2));
+}
+
+// ─── Clear All Hours & Notes ─────────────────────────────────────────────────
+// Run this from the Apps Script editor: Select "clearAllHoursAndNotes" → Run
+// It clears ALL day-column values and notes across ALL sheets.
+// Volunteer names and IDs are NOT touched.
+function clearAllHoursAndNotes() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  
+  for (const sheet of sheets) {
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow < DATA_START_ROW || lastCol < FIRST_DAY_COLUMN) continue;
+    
+    const numRows = lastRow - DATA_START_ROW + 1;
+    const numCols = lastCol - FIRST_DAY_COLUMN + 1;
+    
+    const range = sheet.getRange(DATA_START_ROW, FIRST_DAY_COLUMN, numRows, numCols);
+    range.clearContent();  // clears values
+    range.clearNote();     // clears notes
+    
+    Logger.log('Cleared: ' + sheet.getName() + ' (' + numRows + ' rows × ' + numCols + ' cols)');
+  }
+  
+  SpreadsheetApp.flush();
+  Logger.log('✅ Done! All hours and notes have been cleared.');
 }

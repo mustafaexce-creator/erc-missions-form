@@ -17,12 +17,15 @@ import {
   LogOut,
   Award,
   TrendingUp,
-  TableProperties
+  TableProperties,
+  Moon,
+  ArrowLeft,
+  Download
 } from 'lucide-react';
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 // Replace this URL with your deployed Google Apps Script web app URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx10jryOefUGokcpnTGQy9zBDTokJXLchaLz-afLqL4plMlKYTaUkn61ScwzyKRYwke/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVkK0SNBJzJksVEFhW75hFqPsXBZ28P8Qj0YsIEEtRiowEW6pBP6As2GPrL-JLCG-X/exec';
 
 // ─── ERC Logo Component ─────────────────────────────────────────────────────
 function ERCLogo({ className = '' }) {
@@ -31,7 +34,7 @@ function ERCLogo({ className = '' }) {
       <div className="relative">
         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-erc-red to-erc-red-dark flex items-center justify-center shadow-lg shadow-erc-red/30">
           <svg viewBox="0 0 100 100" className="w-9 h-9 text-white pl-1">
-            <defs>
+            <defs>توقيغ
               <mask id="crescentMask">
                 <rect width="100" height="100" fill="white" />
                 <circle cx="62" cy="50" r="40" fill="black" />
@@ -77,7 +80,8 @@ export default function App() {
   const [missionName, setMissionName] = useState('');
   const [copied, setCopied] = useState(false);
   const [missionDate, setMissionDate] = useState('');
-  const [missionHours, setMissionHours] = useState('');
+  const [timeFrom, setTimeFrom] = useState('');
+  const [timeTo, setTimeTo] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null); // 'success' | 'error' | null
@@ -183,6 +187,36 @@ export default function App() {
     setSelectedVolunteers(prev => prev.filter(v => v.id !== id));
   }, []);
 
+  // ─── Time Calculation ──────────────────────────────────────────────────────
+  const calculateHours = (from, to) => {
+    if (!from || !to) return 0;
+    const [fh, fm] = from.split(':').map(Number);
+    const [th, tm] = to.split(':').map(Number);
+    let fromMinutes = fh * 60 + fm;
+    let toMinutes = th * 60 + tm;
+    if (toMinutes <= fromMinutes) toMinutes += 24 * 60; // past midnight
+    return (toMinutes - fromMinutes) / 60;
+  };
+
+  // Convert Western digits to Arabic-Indic digits
+  const toAr = (val) => String(val).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+
+  // Convert 24h time to 12h Arabic format (e.g. "٨:٠٠ ص")
+  const to12h = (time24) => {
+    if (!time24) return '';
+    const [h, m] = time24.split(':').map(Number);
+    const period = h >= 12 ? 'م' : 'ص';
+    const hour12 = h % 12 || 12;
+    return `${toAr(hour12)}:${toAr(String(m).padStart(2, '0'))} ${period}`;
+  };
+
+  const calculatedHours = calculateHours(timeFrom, timeTo);
+  const isCrossingMidnight = timeFrom && timeTo && (() => {
+    const [fh, fm] = timeFrom.split(':').map(Number);
+    const [th, tm] = timeTo.split(':').map(Number);
+    return (th * 60 + tm) <= (fh * 60 + fm);
+  })();
+
   // Submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -198,8 +232,12 @@ export default function App() {
       setErrorMessage('يرجى تحديد تاريخ المهمة');
       return;
     }
-    if (!missionHours || parseFloat(missionHours) <= 0) {
-      setErrorMessage('يرجى إدخال عدد ساعات صحيح');
+    if (!timeFrom || !timeTo) {
+      setErrorMessage('يرجى تحديد وقت البداية والنهاية');
+      return;
+    }
+    if (calculatedHours <= 0) {
+      setErrorMessage('يرجى إدخال وقت صحيح');
       return;
     }
     if (selectedVolunteers.length === 0) {
@@ -216,7 +254,8 @@ export default function App() {
       setTimeout(() => {
         setSubmitStatus(null);
         setSelectedVolunteers([]);
-        setMissionHours('');
+        setTimeFrom('');
+        setTimeTo('');
       }, 3000);
       return;
     }
@@ -228,7 +267,9 @@ export default function App() {
         action: 'logMission',
         missionName: missionName.trim(),
         date: missionDate,
-        hours: parseFloat(missionHours),
+        hours: parseFloat(calculatedHours.toFixed(2)),
+        timeFrom: timeFrom,
+        timeTo: timeTo,
         volunteerIds: selectedVolunteers.map(v => v.id),
       };
 
@@ -245,7 +286,8 @@ export default function App() {
         setTimeout(() => {
           setSubmitStatus(null);
           setSelectedVolunteers([]);
-          setMissionHours('');
+          setTimeFrom('');
+          setTimeTo('');
         }, 3000);
       } else {
         setSubmitStatus('error');
@@ -299,6 +341,84 @@ export default function App() {
       alert('الرمز السري غير صحيح');
       setPinInput('');
     }
+  };
+
+  // ─── PDF Report ─────────────────────────────────────────────────────────────
+  const downloadPDF = () => {
+    if (!reportData || !currentVolunteerReport) return;
+    const vol = currentVolunteerReport;
+    const ar = (v) => String(v).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+    const rows = reportData.missions.map((m) => `
+      <tr>
+        <td>${m.missionName}</td>
+        <td>${ar(m.date)}${m.timeRange ? `<br/><span style="font-size:11px;color:#666">${ar(m.timeRange)}</span>` : ''}</td>
+        <td>${ar(m.hours.toFixed(1))}</td>
+        <td></td>
+        <td></td>
+      </tr>
+    `).join('');
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>تقرير ${vol.name}</title>
+<style>
+  @page { size: A4; margin: 20mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #222; padding: 40px; }
+  .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #c0392b; padding-bottom: 20px; }
+  .header h1 { font-size: 20px; color: #c0392b; margin-bottom: 6px; }
+  .header p { font-size: 13px; color: #555; }
+  .info { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 13px; }
+  .info span { background: #f5f5f5; padding: 6px 14px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #c0392b; color: white; padding: 10px 8px; font-weight: bold; }
+  td { border: 1px solid #ddd; padding: 10px 8px; text-align: center; vertical-align: middle; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .total-row td { font-weight: bold; background: #fff3f3 !important; border-top: 2px solid #c0392b; }
+  .footer { margin-top: 30px; font-size: 11px; color: #999; text-align: center; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>الهلال الأحمر المصري</h1>
+    <p>تقرير ساعات التطوع</p>
+  </div>
+  <div class="info">
+    <span><b>الاسم:</b> ${vol.name}</span>
+    <span><b>رقم العضوية:</b> ${ar(vol.id)}</span>
+    <span><b>إجمالي الساعات:</b> ${ar(reportData.totalHours.toFixed(1))} ساعة</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>النشاط</th>
+        <th>تاريخ النشاط والفترة من الي</th>
+        <th>اجمالي عدد الساعات</th>
+        <th>عدد النقاط المستحقة</th>
+        <th>توقيع المشرف</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr class="total-row">
+        <td colspan="2">الإجمالي</td>
+        <td>${ar(reportData.totalHours.toFixed(1))}</td>
+        <td></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="footer">تم إنشاء هذا التقرير آلياً</div>
+</body>
+</html>`;
+
+    const w = window.open('', '_blank');
+    w.document.write(html);
+    w.document.close();
+    w.onload = () => w.print();
   };
 
   const filteredManagerVolunteers = allVolunteers.filter(v => {
@@ -464,7 +584,7 @@ export default function App() {
                       <div className="text-center sm:text-left bg-erc-red-50 border border-erc-red/10 rounded-2xl p-4 min-w-[140px]">
                         <p className="text-xs text-erc-red-dark font-bold mb-1">إجمالي الساعات</p>
                         <p className="text-4xl font-black text-erc-red">
-                          {reportData.totalHours.toFixed(1)} <span className="text-base font-bold">س</span>
+                          {toAr(reportData.totalHours.toFixed(1))} <span className="text-base font-bold">س</span>
                         </p>
                       </div>
                     </div>
@@ -474,7 +594,7 @@ export default function App() {
                       <span className="font-bold text-sm text-erc-dark flex items-center gap-1.5">
                         <TrendingUp className="w-4 h-4 text-emerald-500" /> مسار الـ 200 ساعة
                       </span>
-                      <span className="text-xs font-bold text-erc-dark-soft/50">{Math.min(100, (reportData.totalHours / 200) * 100).toFixed(0)}%</span>
+                      <span className="text-xs font-bold text-erc-dark-soft/50">%{toAr(Math.min(100, (reportData.totalHours / 200) * 100).toFixed(0))}</span>
                     </div>
 
                     <div className="h-4 w-full bg-erc-warm-gray rounded-full overflow-hidden mb-4 shadow-inner">
@@ -491,7 +611,7 @@ export default function App() {
                       </div>
                     ) : (
                       <p className="text-sm text-erc-dark-soft/70 font-medium flex items-center gap-2 mt-5">
-                        يحتاج المتطوع لإتمام <strong className="text-erc-red bg-erc-red-50 px-2 rounded tracking-wide">{Math.max(0, 200 - reportData.totalHours).toFixed(1)}</strong> ساعة إضافية للوصول للهدف.
+                        يحتاج المتطوع لإتمام <strong className="text-erc-red bg-erc-red-50 px-2 rounded tracking-wide">{toAr(Math.max(0, 200 - reportData.totalHours).toFixed(1))}</strong> ساعة إضافية للوصول للهدف.
                       </p>
                     )}
                   </div>
@@ -504,7 +624,7 @@ export default function App() {
                         سجل المهمات المفصل
                       </h3>
                       <span className="bg-erc-warm-gray px-3 py-1 rounded-full text-xs font-bold text-erc-dark-soft/60">
-                        {reportData.missions.length} مهمة
+                        {toAr(reportData.missions.length)} مهمة
                       </span>
                     </div>
 
@@ -513,21 +633,23 @@ export default function App() {
                         <thead>
                           <tr className="border-b-2 border-erc-warm-gray/80">
                             <th className="pb-3 px-2 font-black text-erc-dark-soft/70 whitespace-nowrap">التاريخ</th>
-                            <th className="pb-3 px-2 font-black text-erc-dark-soft/70 w-1/2">المهمة</th>
+                            <th className="pb-3 px-2 font-black text-erc-dark-soft/70">المهمة</th>
+                            <th className="pb-3 px-2 font-black text-erc-dark-soft/70 whitespace-nowrap">الوقت</th>
                             <th className="pb-3 px-2 font-black text-erc-dark-soft/70 whitespace-nowrap">الساعات</th>
                           </tr>
                         </thead>
                         <tbody>
                           {reportData.missions.length === 0 ? (
                             <tr>
-                              <td colSpan="3" className="py-12 text-center text-erc-dark-soft/50 font-medium">عذراً، لا توجد مهمات مسجلة لهذا المتطوع.</td>
+                              <td colSpan="4" className="py-12 text-center text-erc-dark-soft/50 font-medium">عذراً، لا توجد مهمات مسجلة لهذا المتطوع.</td>
                             </tr>
                           ) : (
                             reportData.missions.map((m, idx) => (
                               <tr key={idx} className="border-b border-erc-warm-gray/40 last:border-b-0 hover:bg-black/[0.015] transition-colors">
-                                <td className="py-4 px-2 text-erc-dark/70 font-medium whitespace-nowrap align-middle">{m.date}</td>
+                                <td className="py-4 px-2 text-erc-dark/70 font-medium whitespace-nowrap align-middle">{toAr(m.date)}</td>
                                 <td className="py-4 px-2 font-bold text-erc-dark leading-relaxed">{m.missionName}</td>
-                                <td className="py-4 px-2 text-erc-red font-black align-middle text-left max-w-[80px]" dir="ltr">{m.hours.toFixed(1)} س</td>
+                                <td className="py-4 px-2 text-erc-dark-soft/60 font-medium whitespace-nowrap align-middle text-center">{toAr(m.timeRange) || '—'}</td>
+                                <td className="py-4 px-2 text-erc-red font-black align-middle">{toAr(m.hours.toFixed(1))} س</td>
                               </tr>
                             ))
                           )}
@@ -535,6 +657,15 @@ export default function App() {
                       </table>
                     </div>
                   </div>
+
+                  {/* Download PDF Button */}
+                  <button
+                    onClick={downloadPDF}
+                    className="w-full mt-4 py-3 bg-erc-dark hover:bg-black text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                  >
+                    <Download className="w-4 h-4" />
+                    تحميل التقرير PDF
+                  </button>
                 </div>
               )}
             </div>
@@ -628,28 +759,56 @@ export default function App() {
             )}
           </div>
 
-          {/* Mission Hours */}
+          {/* Mission Time Range */}
           <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-black/[0.04] p-5 animate-fade-in-up-delay-2">
             <label className="flex items-center gap-2 text-sm font-bold text-erc-dark mb-3">
               <Clock className="w-4 h-4 text-erc-red" />
-              عدد ساعات المهمة
+              وقت المهمة
             </label>
-            <div className="relative">
-              <input
-                type="number"
-                min="0.5"
-                max="24"
-                step="0.5"
-                value={missionHours}
-                onChange={(e) => setMissionHours(e.target.value)}
-                placeholder="مثال: 4"
-                className="w-full px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base placeholder:text-erc-dark-soft/30 focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
-                required
-              />
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-erc-dark-soft/40 font-medium pointer-events-none">
-                ساعة
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">من الساعة</label>
+                <input
+                  type="time"
+                  value={timeFrom}
+                  onChange={(e) => setTimeFrom(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
+                  required
+                />
+              </div>
+              <ArrowLeft className="w-5 h-5 text-erc-dark-soft/30 mt-5 flex-shrink-0" />
+              <div className="flex-1">
+                <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">إلى الساعة</label>
+                <input
+                  type="time"
+                  value={timeTo}
+                  onChange={(e) => setTimeTo(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
+                  required
+                />
+              </div>
             </div>
+
+            {/* Calculated hours display */}
+            {timeFrom && timeTo && calculatedHours > 0 && (
+              <div className="mt-3 flex items-center justify-between bg-erc-red-50 border border-erc-red/10 rounded-xl px-4 py-2.5">
+                <span className="text-sm font-bold text-erc-dark flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-erc-red" />
+                  المدة المحسوبة
+                </span>
+                <span className="text-lg font-black text-erc-red">{toAr(calculatedHours.toFixed(1))} <span className="text-xs font-bold">ساعة</span></span>
+              </div>
+            )}
+
+            {/* Past midnight notice */}
+            {isCrossingMidnight && (
+              <div className="mt-3 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+                <Moon className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <p className="text-xs font-medium text-amber-800">
+                  ⚠️ هذه المهمة تتجاوز منتصف الليل — تأكد أن الأوقات صحيحة
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Volunteer Selector */}
@@ -750,7 +909,7 @@ export default function App() {
           )}
 
           {/* Summary Bar */}
-          {selectedVolunteers.length > 0 && missionHours && (
+          {selectedVolunteers.length > 0 && timeFrom && timeTo && calculatedHours > 0 && (
             <div className="bg-erc-dark rounded-2xl p-4 text-white animate-fade-in-up">
               <div className="flex items-center justify-center gap-8 text-sm">
                 <div className="flex items-center gap-2">
@@ -760,8 +919,12 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-erc-red-light" />
-                  <span className="text-white/70">ساعات المهمة:</span>
-                  <span className="font-bold">{missionHours} ساعة</span>
+                  <span className="text-white/70">الوقت:</span>
+                  <span className="font-bold">{to12h(timeFrom)} — {to12h(timeTo)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/70">المدة:</span>
+                  <span className="font-bold">{toAr(calculatedHours.toFixed(1))} ساعة</span>
                 </div>
               </div>
             </div>
@@ -770,7 +933,7 @@ export default function App() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || selectedVolunteers.length === 0 || !missionHours}
+            disabled={isSubmitting || selectedVolunteers.length === 0 || !timeFrom || !timeTo || calculatedHours <= 0}
             className="relative w-full py-4 rounded-2xl font-bold text-lg text-white transition-all duration-300 cursor-pointer
               bg-gradient-to-l from-erc-red to-erc-red-dark
               hover:shadow-xl hover:shadow-erc-red/30 hover:scale-[1.01]
@@ -789,7 +952,7 @@ export default function App() {
                 تسجيل المهمة
               </span>
             )}
-            {!isSubmitting && selectedVolunteers.length > 0 && missionHours && (
+            {!isSubmitting && selectedVolunteers.length > 0 && timeFrom && timeTo && calculatedHours > 0 && (
               <div className="absolute inset-0 rounded-2xl animate-shimmer pointer-events-none" />
             )}
           </button>
