@@ -740,7 +740,7 @@ export default function App() {
           </div>
 
           {/* Mission Date */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-black/[0.04] p-5 animate-fade-in-up-delay-1">
+          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-black/[0.04] p-5 animate-fade-in-up-delay-1 overflow-hidden">
             <label className="flex items-center gap-2 text-sm font-bold text-erc-dark mb-3">
               <CalendarDays className="w-4 h-4 text-erc-red" />
               تاريخ المهمة
@@ -749,7 +749,7 @@ export default function App() {
               type="date"
               value={missionDate}
               onChange={(e) => setMissionDate(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
+              className="w-full min-w-0 px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
               required
             />
             {missionDate && (
@@ -760,30 +760,30 @@ export default function App() {
           </div>
 
           {/* Mission Time Range */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-black/[0.04] p-5 animate-fade-in-up-delay-2">
+          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-black/[0.04] p-5 animate-fade-in-up-delay-2 overflow-hidden">
             <label className="flex items-center gap-2 text-sm font-bold text-erc-dark mb-3">
               <Clock className="w-4 h-4 text-erc-red" />
               وقت المهمة
             </label>
             <div className="flex items-center gap-3">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">من الساعة</label>
                 <input
                   type="time"
                   value={timeFrom}
                   onChange={(e) => setTimeFrom(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
+                  className="w-full min-w-0 px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
                   required
                 />
               </div>
               <ArrowLeft className="w-5 h-5 text-erc-dark-soft/30 mt-5 flex-shrink-0" />
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">إلى الساعة</label>
                 <input
                   type="time"
                   value={timeTo}
                   onChange={(e) => setTimeTo(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
+                  className="w-full min-w-0 px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
                   required
                 />
               </div>
