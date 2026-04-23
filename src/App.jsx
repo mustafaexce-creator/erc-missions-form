@@ -31,20 +31,11 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVkK0SNBJzJksV
 function ERCLogo({ className = '' }) {
   return (
     <div className={`flex items-center justify-center ${className}`}>
-      <div className="relative">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-erc-red to-erc-red-dark flex items-center justify-center shadow-lg shadow-erc-red/30">
-          <svg viewBox="0 0 100 100" className="w-9 h-9 text-white pl-1">
-            <defs>توقيغ
-              <mask id="crescentMask">
-                <rect width="100" height="100" fill="white" />
-                <circle cx="62" cy="50" r="40" fill="black" />
-              </mask>
-            </defs>
-            <circle cx="45" cy="50" r="40" fill="currentColor" mask="url(#crescentMask)" />
-          </svg>
-        </div>
-        <div className="absolute -inset-1 rounded-full bg-erc-red/20 animate-pulse -z-10" />
-      </div>
+      <img 
+        src="/logo.png" 
+        alt="شعار الهلال الأحمر المصري - محافظة المنوفية" 
+        className="w-32 h-32 object-contain drop-shadow-sm" 
+      />
     </div>
   );
 }
@@ -348,13 +339,27 @@ export default function App() {
     if (!reportData || !currentVolunteerReport) return;
     const vol = currentVolunteerReport;
     const ar = (v) => String(v).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
-    const rows = reportData.missions.map((m) => `
+    
+    // Build data rows
+    const dataRows = reportData.missions.map((m) => `
       <tr>
-        <td>${m.missionName}</td>
-        <td>${ar(m.date)}${m.timeRange ? `<br/><span style="font-size:11px;color:#666">${ar(m.timeRange)}</span>` : ''}</td>
-        <td>${ar(m.hours.toFixed(1))}</td>
-        <td></td>
-        <td></td>
+        <td class="col-activity">${m.missionName}</td>
+        <td class="col-date">${ar(m.date)}${m.timeRange ? `<br/><span class="time-range">${ar(m.timeRange)}</span>` : ''}</td>
+        <td class="col-hours">${ar(m.hours.toFixed(1))}</td>
+        <td class="col-points"></td>
+        <td class="col-sign"></td>
+      </tr>
+    `).join('');
+
+    // Add empty rows to fill the page (minimum 12 rows total for a clean look)
+    const emptyRowCount = Math.max(0, 12 - reportData.missions.length);
+    const emptyRows = Array(emptyRowCount).fill(`
+      <tr>
+        <td class="col-activity">&nbsp;</td>
+        <td class="col-date">&nbsp;</td>
+        <td class="col-hours">&nbsp;</td>
+        <td class="col-points">&nbsp;</td>
+        <td class="col-sign">&nbsp;</td>
       </tr>
     `).join('');
 
@@ -364,45 +369,94 @@ export default function App() {
 <meta charset="utf-8">
 <title>تقرير ${vol.name}</title>
 <style>
-  @page { size: A4; margin: 20mm; }
+  @page { size: A4; margin: 15mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #222; padding: 40px; }
-  .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #c0392b; padding-bottom: 20px; }
-  .header h1 { font-size: 20px; color: #c0392b; margin-bottom: 6px; }
-  .header p { font-size: 13px; color: #555; }
-  .info { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 13px; }
-  .info span { background: #f5f5f5; padding: 6px 14px; border-radius: 6px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: #c0392b; color: white; padding: 10px 8px; font-weight: bold; }
-  td { border: 1px solid #ddd; padding: 10px 8px; text-align: center; vertical-align: middle; }
-  tr:nth-child(even) td { background: #fafafa; }
-  .total-row td { font-weight: bold; background: #fff3f3 !important; border-top: 2px solid #c0392b; }
-  .footer { margin-top: 30px; font-size: 11px; color: #999; text-align: center; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #222; padding: 20px; }
+  
+  .info-table {
+    margin-bottom: 20px;
+    font-weight: bold;
+    font-size: 14px;
+  }
+  .info-table td {
+    width: 33.33%;
+    background: #fafafa;
+    border: 1.5px solid #aaa;
+    padding: 10px 12px;
+    text-align: right;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  
+  th {
+    padding: 14px 10px;
+    font-weight: bold;
+    font-size: 14px;
+    text-align: center;
+    vertical-align: middle;
+    border: 2px solid #999;
+    line-height: 1.5;
+  }
+  
+  /* Column header colors matching the physical form */
+  .th-activity { background: #D4A843; color: #333; width: 30%; }
+  .th-date     { background: #7BAFD4; color: #333; width: 20%; }
+  .th-hours    { background: #7BAFD4; color: #333; width: 15%; }
+  .th-points   { background: #E8B4C8; color: #333; width: 15%; }
+  .th-sign     { background: #A8D4E6; color: #333; width: 20%; }
+  
+  td {
+    border: 1.5px solid #aaa;
+    padding: 12px 10px;
+    text-align: center;
+    vertical-align: middle;
+    min-height: 40px;
+  }
+  
+  .col-activity { text-align: right; font-weight: 600; font-size: 15px; }
+  .time-range { font-size: 13px; color: #555; }
+  
+  .total-row td {
+    font-weight: bold;
+    background: #f0f0f0;
+    border-top: 2.5px solid #666;
+  }
+  
+  .footer { margin-top: 20px; font-size: 10px; color: #999; text-align: center; }
+  
+
+  
   @media print { body { padding: 0; } }
 </style>
 </head>
 <body>
-  <div class="header">
-    <h1>الهلال الأحمر المصري</h1>
-    <p>تقرير ساعات التطوع</p>
-  </div>
-  <div class="info">
-    <span><b>الاسم:</b> ${vol.name}</span>
-    <span><b>رقم العضوية:</b> ${ar(vol.id)}</span>
-    <span><b>إجمالي الساعات:</b> ${ar(reportData.totalHours.toFixed(1))} ساعة</span>
-  </div>
+  <table class="info-table">
+    <tbody>
+      <tr>
+        <td>الاسم: ${vol.name}</td>
+        <td>رقم العضوية: ${ar(vol.id)}</td>
+        <td>إجمالي الساعات: ${ar(reportData.totalHours.toFixed(1))}</td>
+      </tr>
+      <tr>
+        <td>الفرع التابع له: فرع المنوفية</td>
+        <td>رقم البطاقة:</td>
+        <td>تاريخ التطوع:</td>
+      </tr>
+    </tbody>
+  </table>
   <table>
     <thead>
       <tr>
-        <th>النشاط</th>
-        <th>تاريخ النشاط والفترة من الي</th>
-        <th>اجمالي عدد الساعات</th>
-        <th>عدد النقاط المستحقة</th>
-        <th>توقيع المشرف</th>
+        <th class="th-activity">النشاط</th>
+        <th class="th-date">تاريخ النشاط<br/>الفترة من... إلى..</th>
+        <th class="th-hours">إجمالي<br/>عدد ساعات<br/>تنفيذه</th>
+        <th class="th-points">عدد النقاط<br/>المستحقة</th>
+        <th class="th-sign">توقيع المشرف<br/>المسئول عن النشاط</th>
       </tr>
     </thead>
     <tbody>
-      ${rows}
+      ${dataRows}
+      ${emptyRows}
       <tr class="total-row">
         <td colspan="2">الإجمالي</td>
         <td>${ar(reportData.totalHours.toFixed(1))}</td>
