@@ -334,13 +334,12 @@ export default function App() {
     }
   };
 
-  // ─── PDF Report ─────────────────────────────────────────────────────────────
-  const downloadPDF = () => {
-    if (!reportData || !currentVolunteerReport) return;
+  // ─── Shared Report HTML Builder ──────────────────────────────────────────────
+  const buildReportHTML = () => {
+    if (!reportData || !currentVolunteerReport) return '';
     const vol = currentVolunteerReport;
     const ar = (v) => String(v).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
     
-    // Build data rows
     const dataRows = reportData.missions.map((m) => `
       <tr>
         <td class="col-activity">${m.missionName}</td>
@@ -351,7 +350,6 @@ export default function App() {
       </tr>
     `).join('');
 
-    // Add empty rows to fill the page (minimum 12 rows total for a clean look)
     const emptyRowCount = Math.max(0, 12 - reportData.missions.length);
     const emptyRows = Array(emptyRowCount).fill(`
       <tr>
@@ -363,7 +361,7 @@ export default function App() {
       </tr>
     `).join('');
 
-    const html = `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8">
@@ -398,7 +396,6 @@ export default function App() {
     line-height: 1.5;
   }
   
-  /* Column header colors matching the physical form */
   .th-activity { background: #D4A843; color: #333; width: 30%; }
   .th-date     { background: #7BAFD4; color: #333; width: 20%; }
   .th-hours    { background: #7BAFD4; color: #333; width: 15%; }
@@ -423,9 +420,7 @@ export default function App() {
   }
   
   .footer { margin-top: 20px; font-size: 10px; color: #999; text-align: center; }
-  
 
-  
   @media print { body { padding: 0; } }
 </style>
 </head>
@@ -468,11 +463,30 @@ export default function App() {
   <div class="footer">تم إنشاء هذا التقرير آلياً</div>
 </body>
 </html>`;
+  };
 
+  const downloadPDF = () => {
+    const html = buildReportHTML();
+    if (!html) return;
     const w = window.open('', '_blank');
     w.document.write(html);
     w.document.close();
     w.onload = () => w.print();
+  };
+
+  const downloadWord = () => {
+    const html = buildReportHTML();
+    if (!html) return;
+    const vol = currentVolunteerReport;
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `تقرير_${vol.name}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const filteredManagerVolunteers = allVolunteers.filter(v => {
@@ -712,14 +726,23 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Download PDF Button */}
-                  <button
-                    onClick={downloadPDF}
-                    className="w-full mt-4 py-3 bg-erc-dark hover:bg-black text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md"
-                  >
-                    <Download className="w-4 h-4" />
-                    تحميل التقرير PDF
-                  </button>
+                  {/* Download Buttons */}
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={downloadPDF}
+                      className="flex-1 py-3 bg-erc-dark hover:bg-black text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                    >
+                      <Download className="w-4 h-4" />
+                      تحميل PDF
+                    </button>
+                    <button
+                      onClick={downloadWord}
+                      className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                    >
+                      <FileText className="w-4 h-4" />
+                      تحميل Word
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
