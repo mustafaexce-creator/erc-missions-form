@@ -19,13 +19,42 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-// ─── Configuration ───────────────────────────────────────────────────────────
-const SHEET_NAME = 'مارس'; // Change this to match the active month tab name
+// Arabic month tab names (0-indexed: January=0, February=1, ...)
+const MONTH_NAMES = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+];
+
 const NAME_COLUMN = 2;     // Column B - الاسم رباعي
 const ID_COLUMN = 3;       // Column C - رقم العضوية
-const FIRST_DAY_COLUMN = 4; // Column D - first day column (1-مارس-2026)
+const FIRST_DAY_COLUMN = 4; // Column D - first day column
 const HEADER_ROW = 2;       // Row 2 has the column headers
 const DATA_START_ROW = 3;   // Row 3 is where volunteer data starts
+
+// Helper: get the sheet for a given month index (0-11)
+function getMonthSheet(monthIndex) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const targetName = MONTH_NAMES[monthIndex].trim();
+  // Try exact match first
+  var sheet = ss.getSheetByName(targetName);
+  if (sheet) return sheet;
+  // Fuzzy match: trim and compare all sheet names
+  const allSheets = ss.getSheets();
+  for (var i = 0; i < allSheets.length; i++) {
+    if (allSheets[i].getName().trim() === targetName) return allSheets[i];
+  }
+  return null;
+}
+
+// Helper: find the first available month sheet (for loading volunteers)
+function getFirstAvailableSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  for (const name of MONTH_NAMES) {
+    const sheet = ss.getSheetByName(name);
+    if (sheet) return sheet;
+  }
+  return null;
+}
 
 // Convert Western digits to Arabic-Indic digits
 function toAr(val) {
@@ -56,6 +85,13 @@ function doGet(e) {
       return sendJson(getVolunteerReport(e.parameter.volunteerId));
     }
     
+    // Debug: list all sheet names in the spreadsheet
+    if (action === 'debugSheets') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const names = ss.getSheets().map(s => s.getName());
+      return sendJson({ sheetNames: names, expectedNames: MONTH_NAMES });
+    }
+    
     return sendJson({ error: 'Unknown action' });
   } catch (err) {
     return sendJson({ error: err.message });
@@ -79,8 +115,8 @@ function doPost(e) {
 
 // ─── Get All Volunteers ──────────────────────────────────────────────────────
 function getVolunteers() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  if (!sheet) return { error: 'Sheet not found: ' + SHEET_NAME };
+  const sheet = getFirstAvailableSheet();
+  if (!sheet) return { error: 'لا يوجد أي شيت شهر متاح' };
   
   const lastRow = sheet.getLastRow();
   if (lastRow < DATA_START_ROW) return { volunteers: [] };
@@ -113,11 +149,12 @@ function logMission(data) {
     return { success: false, error: 'بيانات غير مكتملة' };
   }
   
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  if (!sheet) return { success: false, error: 'الجدول غير موجود: ' + SHEET_NAME };
-  
-  // Parse the date to find the correct day column
+  // Determine the correct month sheet from the mission date
   const missionDate = new Date(date);
+  const monthIndex = missionDate.getMonth(); // 0-11
+  const sheet = getMonthSheet(monthIndex);
+  if (!sheet) return { success: false, error: 'شيت شهر ' + MONTH_NAMES[monthIndex] + ' غير موجود' };
+  
   const dayOfMonth = missionDate.getDate();
   
   // The day column is: FIRST_DAY_COLUMN + (dayOfMonth - 1)

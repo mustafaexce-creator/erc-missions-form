@@ -25,16 +25,16 @@ import {
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 // Replace this URL with your deployed Google Apps Script web app URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVkK0SNBJzJksVEFhW75hFqPsXBZ28P8Qj0YsIEEtRiowEW6pBP6As2GPrL-JLCG-X/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVVjGQysJfhVFW3GV1_Sub39IXOpJGK6Uo7RHRE81qm8Kl3U5lNVg3apEMBPynuIfW/exec';
 
 // ─── ERC Logo Component ─────────────────────────────────────────────────────
 function ERCLogo({ className = '' }) {
   return (
     <div className={`flex items-center justify-center ${className}`}>
-      <img 
-        src="/logo.png" 
-        alt="شعار الهلال الأحمر المصري - محافظة المنوفية" 
-        className="w-32 h-32 object-contain drop-shadow-sm" 
+      <img
+        src="/logo.png"
+        alt="شعار الهلال الأحمر المصري - محافظة المنوفية"
+        className="w-32 h-32 object-contain drop-shadow-sm"
       />
     </div>
   );
@@ -64,6 +64,27 @@ function VolunteerTag({ volunteer, onRemove }) {
 
 // ─── Main App ───────────────────────────────────────────────────────────────
 export default function App() {
+  // ─── Form Access Password ────────────────────────────────────────────────────
+  const FORM_PASSWORD = import.meta.env.VITE_FORM_PASSWORD || '';
+  const MANAGER_PIN = import.meta.env.VITE_MANAGER_PIN || '1911';
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return sessionStorage.getItem('erc_auth') === 'true';
+  });
+  const [formPasswordInput, setFormPasswordInput] = useState('');
+  const [formPasswordError, setFormPasswordError] = useState(false);
+
+  const handleFormLogin = (e) => {
+    e.preventDefault();
+    if (formPasswordInput === FORM_PASSWORD) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('erc_auth', 'true');
+      setFormPasswordError(false);
+    } else {
+      setFormPasswordError(true);
+      setFormPasswordInput('');
+    }
+  };
+
   // State
   const [allVolunteers, setAllVolunteers] = useState([]);
   const [selectedVolunteers, setSelectedVolunteers] = useState([]);
@@ -324,7 +345,7 @@ export default function App() {
   // ─── Manager Logic ─────────────────────────────────────────────────────────
   const handlePinSubmit = (e) => {
     e.preventDefault();
-    if (pinInput === '1911') {
+    if (pinInput === MANAGER_PIN) {
       setIsManagerPortal(true);
       setShowPinModal(false);
       setPinInput('');
@@ -339,7 +360,7 @@ export default function App() {
     if (!reportData || !currentVolunteerReport) return '';
     const vol = currentVolunteerReport;
     const ar = (v) => String(v).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
-    
+
     const dataRows = reportData.missions.map((m) => `
       <tr>
         <td class="col-activity">${m.missionName}</td>
@@ -437,6 +458,9 @@ export default function App() {
         <td>رقم البطاقة:</td>
         <td>تاريخ التطوع:</td>
       </tr>
+      <tr>
+        <td colspan="3">الاسم بالانجليزي:</td>
+      </tr>
     </tbody>
   </table>
   <table>
@@ -518,6 +542,48 @@ export default function App() {
   };
 
   const currentVolunteerReport = allVolunteers.find(v => managerSearchQuery && v.id.toString() === managerSearchQuery) || null;
+
+  // ─── Authentication Gate ───────────────────────────────────────────────────
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center py-6 px-4 sm:py-10 bg-erc-warm-gray/10" dir="rtl">
+        <div className="max-w-md w-full bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg p-6 sm:p-8 animate-fade-in-up">
+          <div className="text-center mb-8">
+            <ERCLogo className="mb-6 scale-110 origin-center" />
+            <h1 className="text-2xl font-bold text-erc-dark mb-2">تسجيل الدخول</h1>
+            <p className="text-erc-dark-soft/70">الرجاء إدخال كلمة المرور للوصول إلى النظام</p>
+          </div>
+          
+          <form onSubmit={handleFormLogin} className="space-y-4">
+            <div>
+              <div className="relative">
+                <input
+                  type="password"
+                  value={formPasswordInput}
+                  onChange={(e) => setFormPasswordInput(e.target.value)}
+                  className={`w-full bg-white border ${formPasswordError ? 'border-red-500' : 'border-erc-dark/20'} rounded-xl px-4 py-3 pl-10 text-erc-dark placeholder:text-erc-dark-soft/40 focus:outline-none focus:ring-2 focus:ring-erc-red/20 focus:border-erc-red transition-all shadow-sm`}
+                  placeholder="كلمة المرور..."
+                  dir="ltr"
+                  autoFocus
+                />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-erc-dark-soft/40" />
+              </div>
+              {formPasswordError && (
+                <p className="text-red-500 text-sm mt-2 text-right">كلمة المرور غير صحيحة</p>
+              )}
+            </div>
+            
+            <button
+              type="submit"
+              className="w-full py-3 bg-erc-red hover:bg-erc-red-dark text-white font-bold rounded-xl transition-all shadow-md active:scale-[0.98]"
+            >
+              دخول
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Manager UI ────────────────────────────────────────────────────────────
   if (isManagerPortal) {
