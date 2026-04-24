@@ -66,7 +66,7 @@ function VolunteerTag({ volunteer, onRemove }) {
 export default function App() {
   // ─── Form Access Password ────────────────────────────────────────────────────
   const FORM_PASSWORD = import.meta.env.VITE_FORM_PASSWORD || '';
-  const MANAGER_PIN = import.meta.env.VITE_MANAGER_PIN || '1911';
+  const MANAGER_PIN = import.meta.env.VITE_MANAGER_PIN || '2002';
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return sessionStorage.getItem('erc_auth') === 'true';
   });
