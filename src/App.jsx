@@ -76,11 +76,15 @@ function TimeInput12h({ value, onChange, label }) {
   const { hour, minute, period } = parse(value);
 
   const update = (h, m, p) => {
-    if (!h || m === '') { onChange(''); return; }
-    let h24 = parseInt(h, 10);
+    // Provide sensible defaults if user only clicked one dropdown so far
+    const newH = h || '12';
+    const newM = m || '00';
+    
+    let h24 = parseInt(newH, 10);
     if (p === 'م' && h24 !== 12) h24 += 12;
     if (p === 'ص' && h24 === 12) h24 = 0;
-    onChange(`${String(h24).padStart(2, '0')}:${m}`);
+    
+    onChange(`${String(h24).padStart(2, '0')}:${newM}`);
   };
 
   const sel = "px-2 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200 text-center cursor-pointer";
@@ -90,14 +94,14 @@ function TimeInput12h({ value, onChange, label }) {
       <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">{label}</label>
       <div className="flex items-center gap-1.5">
         <select value={hour} onChange={e => update(e.target.value, minute, period)} className={`${sel} flex-1 min-w-0`} required>
-          <option value="">--</option>
+          <option value="" disabled hidden>--</option>
           {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
             <option key={h} value={h}>{h}</option>
           ))}
         </select>
         <span className="text-erc-dark font-bold text-lg">:</span>
         <select value={minute} onChange={e => update(hour, e.target.value, period)} className={`${sel} flex-1 min-w-0`} required>
-          <option value="">--</option>
+          <option value="" disabled hidden>--</option>
           {Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')).map(m => (
             <option key={m} value={m}>{m}</option>
           ))}
@@ -170,7 +174,7 @@ export default function App() {
     setMissionDate(`${yyyy}-${mm}-${dd}`);
   }, []);
 
-  // Fetch volunteers from Google Apps Script
+  // Fetch volunteers from Google Apps Script with Local Caching
   useEffect(() => {
     if (!APPS_SCRIPT_URL) {
       // Demo data when no Apps Script URL is configured
@@ -191,10 +195,40 @@ export default function App() {
       return;
     }
 
+    const cached = localStorage.getItem('erc_volunteers_cache');
+    
+    // If we have cached volunteers, load them instantly
+    if (cached) {
+      try {
+        setAllVolunteers(JSON.parse(cached));
+        setIsLoading(false);
+        
+        // Background fetch to silently update the cache
+        fetch(`${APPS_SCRIPT_URL}?action=getVolunteers`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.volunteers && data.volunteers.length > 0) {
+              localStorage.setItem('erc_volunteers_cache', JSON.stringify(data.volunteers));
+              setAllVolunteers(data.volunteers); // Update state in case new volunteers were added
+            }
+          })
+          .catch(err => console.warn('Background sync failed:', err));
+          
+        return; // Exit early since we used cache
+      } catch (e) {
+        console.warn('Cache corrupted, fetching fresh.');
+      }
+    }
+
+    // No valid cache, fetch normally and show loading screen
     fetch(`${APPS_SCRIPT_URL}?action=getVolunteers`)
       .then(res => res.json())
       .then(data => {
-        setAllVolunteers(data.volunteers || []);
+        const vols = data.volunteers || [];
+        setAllVolunteers(vols);
+        if (vols.length > 0) {
+          localStorage.setItem('erc_volunteers_cache', JSON.stringify(vols));
+        }
         setIsLoading(false);
       })
       .catch(err => {
