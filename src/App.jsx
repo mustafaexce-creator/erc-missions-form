@@ -12,7 +12,6 @@ import {
   Loader2,
   ChevronDown,
   FileText,
-  Copy,
   Lock,
   LogOut,
   Award,
@@ -62,6 +61,56 @@ function VolunteerTag({ volunteer, onRemove }) {
   );
 }
 
+// ─── 12-Hour Time Picker ────────────────────────────────────────────────────
+function TimeInput12h({ value, onChange, label }) {
+  const parse = (time24) => {
+    if (!time24) return { hour: '', minute: '', period: 'ص' };
+    const [h, m] = time24.split(':').map(Number);
+    return {
+      hour: String(h % 12 || 12),
+      minute: String(m).padStart(2, '0'),
+      period: h >= 12 ? 'م' : 'ص'
+    };
+  };
+
+  const { hour, minute, period } = parse(value);
+
+  const update = (h, m, p) => {
+    if (!h || m === '') { onChange(''); return; }
+    let h24 = parseInt(h, 10);
+    if (p === 'م' && h24 !== 12) h24 += 12;
+    if (p === 'ص' && h24 === 12) h24 = 0;
+    onChange(`${String(h24).padStart(2, '0')}:${m}`);
+  };
+
+  const sel = "px-2 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200 text-center cursor-pointer";
+
+  return (
+    <div>
+      <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">{label}</label>
+      <div className="flex items-center gap-1.5">
+        <select value={hour} onChange={e => update(e.target.value, minute, period)} className={`${sel} flex-1 min-w-0`} required>
+          <option value="">--</option>
+          {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+        <span className="text-erc-dark font-bold text-lg">:</span>
+        <select value={minute} onChange={e => update(hour, e.target.value, period)} className={`${sel} flex-1 min-w-0`} required>
+          <option value="">--</option>
+          {Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')).map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <select value={period} onChange={e => update(hour, minute, e.target.value)} className={`${sel} w-14 flex-shrink-0`}>
+          <option value="ص">ص</option>
+          <option value="م">م</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main App ───────────────────────────────────────────────────────────────
 export default function App() {
   // ─── Form Access Password ────────────────────────────────────────────────────
@@ -90,7 +139,6 @@ export default function App() {
   const [selectedVolunteers, setSelectedVolunteers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [missionName, setMissionName] = useState('');
-  const [copied, setCopied] = useState(false);
   const [missionDate, setMissionDate] = useState('');
   const [timeFrom, setTimeFrom] = useState('');
   const [timeTo, setTimeTo] = useState('');
@@ -314,24 +362,6 @@ export default function App() {
     }
   };
 
-  // Generate text for copying
-  const generateMissionText = () => {
-    let text = missionName ? `${missionName}\n\n` : 'تفاصيل المهمة:\n\n';
-    selectedVolunteers.forEach((v, idx) => {
-      text += `${idx + 1}. ${v.name} ${v.id}\n`;
-    });
-    return text.trim();
-  };
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(generateMissionText());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy', err);
-    }
-  };
 
   // Format date for display
   const formatArabicDate = (dateStr) => {
@@ -910,25 +940,11 @@ export default function App() {
             </label>
             <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">من الساعة</label>
-                <input
-                  type="time"
-                  value={timeFrom}
-                  onChange={(e) => setTimeFrom(e.target.value)}
-                  className="w-full min-w-0 px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
-                  required
-                />
+                <TimeInput12h value={timeFrom} onChange={setTimeFrom} label="من الساعة" />
               </div>
               <ArrowLeft className="w-5 h-5 text-erc-dark-soft/30 mt-5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <label className="text-xs text-erc-dark-soft/50 font-medium mb-1 block">إلى الساعة</label>
-                <input
-                  type="time"
-                  value={timeTo}
-                  onChange={(e) => setTimeTo(e.target.value)}
-                  className="w-full min-w-0 px-4 py-3 rounded-xl bg-erc-warm-gray/50 border border-erc-warm-gray text-erc-dark font-medium text-base focus:outline-none focus:ring-2 focus:ring-erc-red/30 focus:border-erc-red/50 transition-all duration-200"
-                  required
-                />
+                <TimeInput12h value={timeTo} onChange={setTimeTo} label="إلى الساعة" />
               </div>
             </div>
 
@@ -1101,28 +1117,6 @@ export default function App() {
           </button>
         </form>
 
-        {/* Copy Mission Details */}
-        {selectedVolunteers.length > 0 && (
-          <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/80 shadow-lg shadow-black/[0.04] p-5 animate-fade-in-up text-right">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm font-bold text-erc-dark flex items-center gap-2">
-                <FileText className="w-4 h-4 text-erc-red" />
-                تفاصيل المهمة للنسخ
-              </h3>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-erc-red-50 hover:bg-erc-red-100 text-erc-red-dark transition-colors active:scale-95"
-              >
-                {copied ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'تم النسخ!' : 'نسخ النص'}
-              </button>
-            </div>
-            <pre className="whitespace-pre-wrap text-sm text-erc-dark-soft font-mono bg-erc-warm-gray/30 p-4 rounded-xl border border-erc-warm-gray/50 leading-loose text-right" dir="rtl">
-              {generateMissionText()}
-            </pre>
-          </div>
-        )}
 
         {/* Footer */}
         <footer className="flex items-center justify-between mt-8 mb-4 px-2">
