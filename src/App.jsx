@@ -24,7 +24,7 @@ import {
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 // Replace this URL with your deployed Google Apps Script web app URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVVjGQysJfhVFW3GV1_Sub39IXOpJGK6Uo7RHRE81qm8Kl3U5lNVg3apEMBPynuIfW/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyLvmzmwnH2KnTMgi037tVLu5jp5jyDq9l3HlhZ95qMwNG2i5lzjhRwMcHmPVIscmTe/exec';
 
 // ─── ERC Logo Component ─────────────────────────────────────────────────────
 function ERCLogo({ className = '' }) {

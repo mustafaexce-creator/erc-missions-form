@@ -33,15 +33,20 @@ const DATA_START_ROW = 3;   // Row 3 is where volunteer data starts
 
 // Helper: get the sheet for a given month index (0-11)
 function getMonthSheet(monthIndex) {
+  if (monthIndex === undefined || monthIndex === null || monthIndex < 0 || monthIndex > 11) {
+    return null;
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const targetName = MONTH_NAMES[monthIndex].trim();
+  const targetName = MONTH_NAMES[monthIndex];
+  if (!targetName) return null;
   // Try exact match first
   var sheet = ss.getSheetByName(targetName);
   if (sheet) return sheet;
   // Fuzzy match: trim and compare all sheet names
+  var trimmedTarget = targetName.trim();
   const allSheets = ss.getSheets();
   for (var i = 0; i < allSheets.length; i++) {
-    if (allSheets[i].getName().trim() === targetName) return allSheets[i];
+    if (allSheets[i].getName().trim() === trimmedTarget) return allSheets[i];
   }
   return null;
 }
@@ -115,8 +120,9 @@ function doPost(e) {
 
 // ─── Get All Volunteers ──────────────────────────────────────────────────────
 function getVolunteers() {
-  const sheet = getFirstAvailableSheet();
-  if (!sheet) return { error: 'لا يوجد أي شيت شهر متاح' };
+  const currentMonth = new Date().getMonth(); // 0-11
+  const sheet = getMonthSheet(currentMonth);
+  if (!sheet) return { error: 'شيت شهر ' + MONTH_NAMES[currentMonth] + ' غير موجود' };
   
   const lastRow = sheet.getLastRow();
   if (lastRow < DATA_START_ROW) return { volunteers: [] };
