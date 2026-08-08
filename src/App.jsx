@@ -224,6 +224,13 @@ export default function App() {
     fetch(`${APPS_SCRIPT_URL}?action=getVolunteers`)
       .then(res => res.json())
       .then(data => {
+        if (data.error) {
+          setErrorMessage(data.error);
+          setAllVolunteers([]);
+          setIsLoading(false);
+          return;
+        }
+
         const vols = data.volunteers || [];
         setAllVolunteers(vols);
         if (vols.length > 0) {
